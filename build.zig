@@ -41,6 +41,8 @@ pub fn build(b: *std.Build) void {
     const mod_tests = b.addTest(.{ .root_module = nats });
     const run_mod_tests = b.addRunArtifact(mod_tests);
 
+    b.getInstallStep().dependOn(&mod_tests.step);
+
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
 
@@ -67,6 +69,12 @@ pub fn build(b: *std.Build) void {
     const run_io_backend_tests = b.addRunArtifact(io_backend_tests);
     test_step.dependOn(&run_io_backend_tests.step);
 
+    const examples_step = b.step("examples", "Build examples");
+    const integration_bins_step = b.step(
+        "integration-bins",
+        "Build integration test binaries",
+    );
+
     // 1. Simple example (hello world - entry point)
     const simple_exe = b.addExecutable(.{
         .name = "example-simple",
@@ -80,12 +88,11 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(simple_exe);
+    examples_step.dependOn(&simple_exe.step);
 
     const run_simple = b.step("run-simple", "Run simple hello world example");
     const simple_cmd = b.addRunArtifact(simple_exe);
     run_simple.dependOn(&simple_cmd.step);
-    simple_cmd.step.dependOn(b.getInstallStep());
 
     // 2. Request/Reply example (RPC pattern)
     const request_reply_exe = b.addExecutable(.{
@@ -100,7 +107,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(request_reply_exe);
+    examples_step.dependOn(&request_reply_exe.step);
 
     const run_request_reply = b.step(
         "run-request-reply",
@@ -108,7 +115,6 @@ pub fn build(b: *std.Build) void {
     );
     const request_reply_cmd = b.addRunArtifact(request_reply_exe);
     run_request_reply.dependOn(&request_reply_cmd.step);
-    request_reply_cmd.step.dependOn(b.getInstallStep());
 
     // Headers example (metadata with HPUB/HMSG)
     const headers_exe = b.addExecutable(.{
@@ -123,7 +129,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(headers_exe);
+    examples_step.dependOn(&headers_exe.step);
 
     const run_headers = b.step(
         "run-headers",
@@ -131,7 +137,6 @@ pub fn build(b: *std.Build) void {
     );
     const headers_cmd = b.addRunArtifact(headers_exe);
     run_headers.dependOn(&headers_cmd.step);
-    headers_cmd.step.dependOn(b.getInstallStep());
 
     // 3. Queue Groups example (load balancing with workers)
     const queue_groups_exe = b.addExecutable(.{
@@ -145,7 +150,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(queue_groups_exe);
+    examples_step.dependOn(&queue_groups_exe.step);
 
     const run_queue_groups = b.step(
         "run-queue-groups",
@@ -153,7 +158,6 @@ pub fn build(b: *std.Build) void {
     );
     const queue_groups_cmd = b.addRunArtifact(queue_groups_exe);
     run_queue_groups.dependOn(&queue_groups_cmd.step);
-    queue_groups_cmd.step.dependOn(b.getInstallStep());
 
     // 4. Select example (io.select timeout pattern)
     const select_exe = b.addExecutable(.{
@@ -168,7 +172,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(select_exe);
+    examples_step.dependOn(&select_exe.step);
 
     const run_select = b.step(
         "run-select",
@@ -176,7 +180,6 @@ pub fn build(b: *std.Build) void {
     );
     const select_cmd = b.addRunArtifact(select_exe);
     run_select.dependOn(&select_cmd.step);
-    select_cmd.step.dependOn(b.getInstallStep());
 
     // 5. Batch Receiving example (efficient batch message retrieval)
     const batch_exe = b.addExecutable(.{
@@ -190,7 +193,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(batch_exe);
+    examples_step.dependOn(&batch_exe.step);
 
     const run_batch = b.step(
         "run-batch-receiving",
@@ -198,7 +201,6 @@ pub fn build(b: *std.Build) void {
     );
     const batch_cmd = b.addRunArtifact(batch_exe);
     run_batch.dependOn(&batch_cmd.step);
-    batch_cmd.step.dependOn(b.getInstallStep());
 
     // 6. Graceful Shutdown example (drain and lifecycle)
     const shutdown_exe = b.addExecutable(.{
@@ -212,7 +214,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(shutdown_exe);
+    examples_step.dependOn(&shutdown_exe.step);
 
     const run_shutdown = b.step(
         "run-graceful-shutdown",
@@ -220,7 +222,6 @@ pub fn build(b: *std.Build) void {
     );
     const shutdown_cmd = b.addRunArtifact(shutdown_exe);
     run_shutdown.dependOn(&shutdown_cmd.step);
-    shutdown_cmd.step.dependOn(b.getInstallStep());
 
     // 7. Reconnection example (resilience patterns)
     const reconnect_exe = b.addExecutable(.{
@@ -234,7 +235,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(reconnect_exe);
+    examples_step.dependOn(&reconnect_exe.step);
 
     const run_reconnect = b.step(
         "run-reconnection",
@@ -242,7 +243,6 @@ pub fn build(b: *std.Build) void {
     );
     const reconnect_cmd = b.addRunArtifact(reconnect_exe);
     run_reconnect.dependOn(&reconnect_cmd.step);
-    reconnect_cmd.step.dependOn(b.getInstallStep());
 
     // 8. Polling Loop example (non-blocking patterns)
     const polling_exe = b.addExecutable(.{
@@ -256,7 +256,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(polling_exe);
+    examples_step.dependOn(&polling_exe.step);
 
     const run_polling = b.step(
         "run-polling-loop",
@@ -264,7 +264,6 @@ pub fn build(b: *std.Build) void {
     );
     const polling_cmd = b.addRunArtifact(polling_exe);
     run_polling.dependOn(&polling_cmd.step);
-    polling_cmd.step.dependOn(b.getInstallStep());
 
     // 9. Event Callbacks example (connection lifecycle)
     const events_exe = b.addExecutable(.{
@@ -278,7 +277,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(events_exe);
+    examples_step.dependOn(&events_exe.step);
 
     const run_events = b.step(
         "run-events",
@@ -286,7 +285,6 @@ pub fn build(b: *std.Build) void {
     );
     const events_cmd = b.addRunArtifact(events_exe);
     run_events.dependOn(&events_cmd.step);
-    events_cmd.step.dependOn(b.getInstallStep());
 
     // 10. Callback Subscriptions example
     const callback_exe = b.addExecutable(.{
@@ -302,7 +300,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(callback_exe);
+    examples_step.dependOn(&callback_exe.step);
 
     const run_callback = b.step(
         "run-callback",
@@ -310,7 +308,6 @@ pub fn build(b: *std.Build) void {
     );
     const callback_cmd = b.addRunArtifact(callback_exe);
     run_callback.dependOn(&callback_cmd.step);
-    callback_cmd.step.dependOn(b.getInstallStep());
 
     // 11. Request/Reply with Callback example
     const req_rep_cb_exe = b.addExecutable(.{
@@ -327,7 +324,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(req_rep_cb_exe);
+    examples_step.dependOn(&req_rep_cb_exe.step);
 
     const run_req_rep_cb = b.step(
         "run-request-reply-callback",
@@ -335,7 +332,6 @@ pub fn build(b: *std.Build) void {
     );
     const req_rep_cb_cmd = b.addRunArtifact(req_rep_cb_exe);
     run_req_rep_cb.dependOn(&req_rep_cb_cmd.step);
-    req_rep_cb_cmd.step.dependOn(b.getInstallStep());
 
     // 12. JetStream Publish example
     const js_pub_exe = b.addExecutable(.{
@@ -351,7 +347,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(js_pub_exe);
+    examples_step.dependOn(&js_pub_exe.step);
 
     const run_js_pub = b.step(
         "run-jetstream-publish",
@@ -359,7 +355,6 @@ pub fn build(b: *std.Build) void {
     );
     const js_pub_cmd = b.addRunArtifact(js_pub_exe);
     run_js_pub.dependOn(&js_pub_cmd.step);
-    js_pub_cmd.step.dependOn(b.getInstallStep());
 
     // 13. JetStream Consume example
     const js_consume_exe = b.addExecutable(.{
@@ -375,7 +370,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(js_consume_exe);
+    examples_step.dependOn(&js_consume_exe.step);
 
     const run_js_consume = b.step(
         "run-jetstream-consume",
@@ -385,7 +380,6 @@ pub fn build(b: *std.Build) void {
         js_consume_exe,
     );
     run_js_consume.dependOn(&js_consume_cmd.step);
-    js_consume_cmd.step.dependOn(b.getInstallStep());
 
     // 14. JetStream Push Consumer example
     const js_push_exe = b.addExecutable(.{
@@ -401,7 +395,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(js_push_exe);
+    examples_step.dependOn(&js_push_exe.step);
 
     const run_js_push = b.step(
         "run-jetstream-push",
@@ -409,7 +403,6 @@ pub fn build(b: *std.Build) void {
     );
     const js_push_cmd = b.addRunArtifact(js_push_exe);
     run_js_push.dependOn(&js_push_cmd.step);
-    js_push_cmd.step.dependOn(b.getInstallStep());
 
     // 15. JetStream Async Publish example
     const js_async_exe = b.addExecutable(.{
@@ -425,7 +418,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(js_async_exe);
+    examples_step.dependOn(&js_async_exe.step);
 
     const run_js_async = b.step(
         "run-jetstream-async-publish",
@@ -435,7 +428,6 @@ pub fn build(b: *std.Build) void {
         js_async_exe,
     );
     run_js_async.dependOn(&js_async_cmd.step);
-    js_async_cmd.step.dependOn(b.getInstallStep());
 
     // 16. Key-Value Store example
     const kv_exe = b.addExecutable(.{
@@ -451,7 +443,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(kv_exe);
+    examples_step.dependOn(&kv_exe.step);
 
     const run_kv = b.step(
         "run-kv",
@@ -459,7 +451,6 @@ pub fn build(b: *std.Build) void {
     );
     const kv_cmd = b.addRunArtifact(kv_exe);
     run_kv.dependOn(&kv_cmd.step);
-    kv_cmd.step.dependOn(b.getInstallStep());
 
     // 17. Key-Value Watch example
     const kv_watch_exe = b.addExecutable(.{
@@ -475,7 +466,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(kv_watch_exe);
+    examples_step.dependOn(&kv_watch_exe.step);
 
     const run_kv_watch = b.step(
         "run-kv-watch",
@@ -485,7 +476,6 @@ pub fn build(b: *std.Build) void {
         kv_watch_exe,
     );
     run_kv_watch.dependOn(&kv_watch_cmd.step);
-    kv_watch_cmd.step.dependOn(b.getInstallStep());
 
     // 18. Microservices echo example
     const micro_echo_exe = b.addExecutable(.{
@@ -501,7 +491,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(micro_echo_exe);
+    examples_step.dependOn(&micro_echo_exe.step);
 
     const run_micro_echo = b.step(
         "run-micro-echo",
@@ -511,7 +501,6 @@ pub fn build(b: *std.Build) void {
         micro_echo_exe,
     );
     run_micro_echo.dependOn(&micro_echo_cmd.step);
-    micro_echo_cmd.step.dependOn(b.getInstallStep());
 
     // NATS by Example: Pub-Sub messaging
     const nbe_pubsub_exe = b.addExecutable(.{
@@ -527,7 +516,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(nbe_pubsub_exe);
+    examples_step.dependOn(&nbe_pubsub_exe.step);
 
     const run_nbe_pubsub = b.step(
         "run-nbe-messaging-pub-sub",
@@ -535,7 +524,6 @@ pub fn build(b: *std.Build) void {
     );
     const nbe_pubsub_cmd = b.addRunArtifact(nbe_pubsub_exe);
     run_nbe_pubsub.dependOn(&nbe_pubsub_cmd.step);
-    nbe_pubsub_cmd.step.dependOn(b.getInstallStep());
 
     // NATS by Example: Request-Reply
     const nbe_reqrep_exe = b.addExecutable(.{
@@ -551,7 +539,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(nbe_reqrep_exe);
+    examples_step.dependOn(&nbe_reqrep_exe.step);
 
     const run_nbe_reqrep = b.step(
         "run-nbe-messaging-request-reply",
@@ -559,7 +547,6 @@ pub fn build(b: *std.Build) void {
     );
     const nbe_reqrep_cmd = b.addRunArtifact(nbe_reqrep_exe);
     run_nbe_reqrep.dependOn(&nbe_reqrep_cmd.step);
-    nbe_reqrep_cmd.step.dependOn(b.getInstallStep());
 
     // NATS by Example: JSON payloads
     const nbe_json_exe = b.addExecutable(.{
@@ -575,7 +562,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(nbe_json_exe);
+    examples_step.dependOn(&nbe_json_exe.step);
 
     const run_nbe_json = b.step(
         "run-nbe-messaging-json",
@@ -583,7 +570,6 @@ pub fn build(b: *std.Build) void {
     );
     const nbe_json_cmd = b.addRunArtifact(nbe_json_exe);
     run_nbe_json.dependOn(&nbe_json_cmd.step);
-    nbe_json_cmd.step.dependOn(b.getInstallStep());
 
     // NATS by Example: Concurrent processing
     const nbe_concurrent_exe = b.addExecutable(.{
@@ -599,7 +585,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(nbe_concurrent_exe);
+    examples_step.dependOn(&nbe_concurrent_exe.step);
 
     const run_nbe_concurrent = b.step(
         "run-nbe-messaging-concurrent",
@@ -609,7 +595,6 @@ pub fn build(b: *std.Build) void {
         nbe_concurrent_exe,
     );
     run_nbe_concurrent.dependOn(&nbe_concurrent_cmd.step);
-    nbe_concurrent_cmd.step.dependOn(b.getInstallStep());
 
     // NATS by Example: Iterating multiple subscriptions
     const nbe_multisub_exe = b.addExecutable(.{
@@ -626,7 +611,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(nbe_multisub_exe);
+    examples_step.dependOn(&nbe_multisub_exe.step);
 
     const run_nbe_multisub = b.step(
         "run-nbe-messaging-iterating-multiple-subscriptions",
@@ -636,7 +621,6 @@ pub fn build(b: *std.Build) void {
         nbe_multisub_exe,
     );
     run_nbe_multisub.dependOn(&nbe_multisub_cmd.step);
-    nbe_multisub_cmd.step.dependOn(b.getInstallStep());
 
     // NATS by Example: NKeys and JWTs (auth)
     const nbe_nkeys_jwts_exe = b.addExecutable(.{
@@ -652,7 +636,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(nbe_nkeys_jwts_exe);
+    examples_step.dependOn(&nbe_nkeys_jwts_exe.step);
 
     const run_nbe_nkeys_jwts = b.step(
         "run-nbe-auth-nkeys-jwts",
@@ -662,7 +646,6 @@ pub fn build(b: *std.Build) void {
         nbe_nkeys_jwts_exe,
     );
     run_nbe_nkeys_jwts.dependOn(&nbe_nkeys_jwts_cmd.step);
-    nbe_nkeys_jwts_cmd.step.dependOn(b.getInstallStep());
 
     const fmt = b.addFmt(.{
         .paths = &.{ "src", "doc", "build.zig" },
@@ -691,7 +674,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(integration_exe);
+    integration_bins_step.dependOn(&integration_exe.step);
 
     const run_integration = b.step(
         "test-integration",
@@ -715,7 +698,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(micro_integration_exe);
+    integration_bins_step.dependOn(&micro_integration_exe.step);
 
     const run_micro_integration = b.step(
         "test-integration-micro",
@@ -741,7 +724,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(tls_integration_exe);
+    integration_bins_step.dependOn(&tls_integration_exe.step);
 
     const run_tls_integration = b.step(
         "test-integration-tls",
