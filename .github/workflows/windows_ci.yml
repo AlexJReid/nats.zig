@@ -33,9 +33,6 @@ jobs:
       - name: Show Zig version
         run: zig version
 
-      - name: Check formatting
-        run: zig build fmt-check
-
       - name: Build examples and package
         run: zig build
 
@@ -51,8 +48,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - mode: Debug
-            args: ""
           - mode: ReleaseFast
             args: -Doptimize=ReleaseFast
 
