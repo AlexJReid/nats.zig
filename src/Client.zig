@@ -103,7 +103,10 @@ pub const MsgHandler = struct {
 fn isValidFd(fd: std.posix.fd_t) bool {
     if (fd < 0) return false;
     const F_GETFD = 1;
-    const rc = std.posix.system.fcntl(fd, F_GETFD, 0);
+    // Patched locally: bare `0` literal trips Zig 0.16's variadic-call check
+    // (integer/float literals must be cast to a fixed-size type). Cast to
+    // c_int matches the syscall signature.
+    const rc = std.posix.system.fcntl(fd, F_GETFD, @as(c_int, 0));
     // fcntl returns the fd flags on success, or a
     // large unsigned value (wrapped errno) on failure
     return rc < 0x1000;
