@@ -1,0 +1,108 @@
+name: Windows CI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZIG_VERSION: 0.16.0
+  NATS_SERVER_VERSION: v2.12.7
+  NATS_CLI_VERSION: v0.3.1
+
+jobs:
+  build:
+    name: Build and unit tests
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Show Zig version
+        run: zig version
+
+      - name: Check formatting
+        run: zig build fmt-check
+
+      - name: Build examples and package
+        run: zig build
+
+      - name: Run unit tests
+        run: zig build test
+
+  integration:
+    name: Integration tests (${{ matrix.mode }})
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: Debug
+            args: ""
+          - mode: ReleaseFast
+            args: -Doptimize=ReleaseFast
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+          cache-key: windows-integration-${{ matrix.mode }}
+
+      - name: Install NATS tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $natsServerArchive = "nats-server-$env:NATS_SERVER_VERSION-windows-amd64.zip"
+          $natsServerUrl = "https://github.com/nats-io/nats-server/releases/download/$env:NATS_SERVER_VERSION/$natsServerArchive"
+          $natsCliVersion = $env:NATS_CLI_VERSION -replace "^v", ""
+          $natsCliArchive = "nats-$natsCliVersion-windows-amd64.zip"
+          $natsCliUrl = "https://github.com/nats-io/natscli/releases/download/$env:NATS_CLI_VERSION/$natsCliArchive"
+
+          $binDir = Join-Path $env:USERPROFILE ".local\bin"
+          $serverDir = Join-Path $env:RUNNER_TEMP "nats-server"
+          $cliDir = Join-Path $env:RUNNER_TEMP "nats-cli"
+          New-Item -ItemType Directory -Force -Path $binDir, $serverDir, $cliDir | Out-Null
+
+          $serverZip = Join-Path $env:RUNNER_TEMP $natsServerArchive
+          Invoke-WebRequest -Uri $natsServerUrl -OutFile $serverZip
+          Expand-Archive -Path $serverZip -DestinationPath $serverDir -Force
+          $natsServerBin = Get-ChildItem -Path $serverDir -Recurse -Filter "nats-server.exe" | Select-Object -First 1
+          if ($null -eq $natsServerBin) { throw "nats-server.exe not found" }
+          Copy-Item -Path $natsServerBin.FullName -Destination (Join-Path $binDir "nats-server.exe") -Force
+
+          $cliZip = Join-Path $env:RUNNER_TEMP $natsCliArchive
+          Invoke-WebRequest -Uri $natsCliUrl -OutFile $cliZip
+          Expand-Archive -Path $cliZip -DestinationPath $cliDir -Force
+          $natsCliBin = Get-ChildItem -Path $cliDir -Recurse -Filter "nats.exe" | Select-Object -First 1
+          if ($null -eq $natsCliBin) { throw "nats.exe not found" }
+          Copy-Item -Path $natsCliBin.FullName -Destination (Join-Path $binDir "nats.exe") -Force
+
+          Add-Content -Path $env:GITHUB_PATH -Value $binDir
+
+      - name: Show tool versions
+        run: |
+          zig version
+          nats-server --version
+          nats --version
+
+      - name: Run integration tests
+        run: zig build test-integration ${{ matrix.args }}
