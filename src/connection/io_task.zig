@@ -287,22 +287,37 @@ const PollResult = enum {
     disconnected,
 };
 
+const PollFd = if (native_os == .windows) extern struct {
+    fd: posix.socket_t,
+    events: i16,
+    revents: i16,
+} else posix.pollfd;
+
+const poll_in: i16 = if (native_os == .windows) 0x0300 else posix.POLL.IN;
+const poll_err: i16 = if (native_os == .windows) 0x0001 else posix.POLL.ERR;
+const poll_hup: i16 = if (native_os == .windows) 0x0002 else posix.POLL.HUP;
+
+extern "ws2_32" fn WSAPoll(
+    fdArray: [*]PollFd,
+    fds: c_ulong,
+    timeout: c_int,
+) callconv(.winapi) c_int;
+
 /// Cross-platform socket poll.
 /// std.posix.poll has a Windows codepath that calls
 /// windows.poll which does not exist in this Zig version.
 /// Use WSAPoll directly on Windows.
 fn pollSockets(
-    fds: []posix.pollfd,
+    fds: []PollFd,
     timeout: i32,
-) posix.PollError!usize {
+) !usize {
     if (native_os == .windows) {
-        const ws2 = std.os.windows.ws2_32;
-        const rc = ws2.WSAPoll(
+        const rc = WSAPoll(
             fds.ptr,
             @intCast(fds.len),
             timeout,
         );
-        if (rc == ws2.SOCKET_ERROR)
+        if (rc == -1)
             return error.NetworkDown;
         return @intCast(rc);
     }
@@ -318,23 +333,19 @@ inline fn pollForData(
     fd: posix.socket_t,
     timeout_ms: i32,
 ) PollResult {
-    var fds = [_]posix.pollfd{.{
+    var fds = [_]PollFd{.{
         .fd = fd,
-        .events = posix.POLL.IN,
+        .events = poll_in,
         .revents = 0,
     }};
     const ready = pollSockets(&fds, timeout_ms) catch return .no_data;
     if (ready == 0) return .no_data;
 
-    // Single load, combined checks (avoid 3 separate loads)
     const revents = fds[0].revents;
-    // REVIEWED(2025-03): POLLHUP prioritized over POLLIN intentionally.
-    // Dead connection detection is more important than draining
-    // partial data; reconnect recovers cleanly.
-    if ((revents & (posix.POLL.HUP | posix.POLL.ERR)) != 0)
+    if ((revents & (poll_hup | poll_err)) != 0)
         return .disconnected;
 
-    if ((revents & posix.POLL.IN) != 0) return .has_data;
+    if ((revents & poll_in) != 0) return .has_data;
     return .no_data;
 }
 
@@ -365,8 +376,10 @@ inline fn tryFillBuffer(client: *Client) ReadResult {
             // Check if TCP reader has buffered encrypted data (poll can't see this)
             const tcp_buffered = client.reader.interface.buffered().len;
 
-            if (tcp_buffered == 0) {
-                // TCP buffer empty - poll socket for more encrypted data
+            if (tcp_buffered == 0 and native_os != .windows) {
+                // TCP buffer empty - poll socket for more encrypted data.
+                // Windows skips poll: AFD handles aren't Winsock sockets, so
+                // WSAPoll fails with WSAENOTSOCK. fillMore() blocks instead.
                 const poll_result = pollForData(fd, POLL_TIMEOUT_MS);
                 if (poll_result == .disconnected) return .disconnected;
                 if (poll_result == .no_data) {
@@ -406,15 +419,20 @@ inline fn tryFillBuffer(client: *Client) ReadResult {
         }
     }
 
-    // Non-TLS: simple poll + read
-    const poll_result = pollForData(fd, POLL_TIMEOUT_MS);
+    // Non-TLS: simple poll + read.
+    // Windows path skips WSAPoll because std.Io.Threaded uses AFD handles,
+    // not Winsock SOCKETs (WSAPoll returns WSAENOTSOCK). The reader.fillMore()
+    // path is interruptible via deinit closing the handle, so blocking is fine.
+    if (native_os != .windows) {
+        const poll_result = pollForData(fd, POLL_TIMEOUT_MS);
 
-    if (poll_result == .disconnected) {
-        return .disconnected;
-    }
-    if (poll_result == .no_data) {
-        if (dbg.enabled) client.io_task_stats.fill_poll_timeouts += 1;
-        return .no_progress;
+        if (poll_result == .disconnected) {
+            return .disconnected;
+        }
+        if (poll_result == .no_data) {
+            if (dbg.enabled) client.io_task_stats.fill_poll_timeouts += 1;
+            return .no_progress;
+        }
     }
 
     // Atomic read: race with deinit closing socket before fillMore()

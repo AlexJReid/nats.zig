@@ -12,6 +12,7 @@
 //! Connection-scoped: Allocator, Io, Reader, Writer stored for lifetime.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 
@@ -101,6 +102,9 @@ pub const MsgHandler = struct {
 /// Used to guard shutdown/close calls that panic on
 /// BADF in debug mode (Io.Threaded treats as bug).
 fn isValidFd(fd: std.posix.fd_t) bool {
+    if (builtin.os.tag == .windows)
+        return @intFromPtr(fd) != std.math.maxInt(usize);
+
     if (fd < 0) return false;
     const F_GETFD = 1;
     // Patched locally: bare `0` literal trips Zig 0.16's variadic-call check
@@ -947,18 +951,22 @@ pub fn connect(
     // TCP_NODELAY
     const enable: u32 = 1;
     client.tcp_nodelay_set = true;
-    std.posix.setsockopt(
-        client.stream.socket.handle,
-        std.posix.IPPROTO.TCP,
-        std.posix.TCP.NODELAY,
-        std.mem.asBytes(&enable),
-    ) catch {
+    if (builtin.os.tag == .windows) {
         client.tcp_nodelay_set = false;
-    };
+    } else {
+        std.posix.setsockopt(
+            client.stream.socket.handle,
+            std.posix.IPPROTO.TCP,
+            std.posix.TCP.NODELAY,
+            std.mem.asBytes(&enable),
+        ) catch {
+            client.tcp_nodelay_set = false;
+        };
+    }
 
     // Set TCP receive buffer size for better backpressure handling
     client.tcp_rcvbuf_set = opts.tcp_rcvbuf > 0;
-    if (opts.tcp_rcvbuf > 0) {
+    if (opts.tcp_rcvbuf > 0 and builtin.os.tag != .windows) {
         std.posix.setsockopt(
             client.stream.socket.handle,
             std.posix.SOL.SOCKET,
@@ -3980,11 +3988,7 @@ fn reserveRingEntry(
     // 1000 iterations = ~10ms budget, well above the
     // io_task's ~1ms drain cycle.
     for (0..1000) |_| {
-        var ts: std.posix.timespec = .{
-            .sec = 0,
-            .nsec = 10_000,
-        };
-        _ = std.posix.system.nanosleep(&ts, &ts);
+        self.io.sleep(.fromMicroseconds(10), .awake) catch {};
         if (self.publish_ring.reserve(max_size)) |e|
             return e;
     }
@@ -4085,12 +4089,14 @@ pub fn tryConnect(
 
     // Set TCP_NODELAY
     const enable: u32 = 1;
-    std.posix.setsockopt(
-        self.stream.socket.handle,
-        std.posix.IPPROTO.TCP,
-        std.posix.TCP.NODELAY,
-        std.mem.asBytes(&enable),
-    ) catch {};
+    if (builtin.os.tag != .windows) {
+        std.posix.setsockopt(
+            self.stream.socket.handle,
+            std.posix.IPPROTO.TCP,
+            std.posix.TCP.NODELAY,
+            std.mem.asBytes(&enable),
+        ) catch {};
+    }
 
     // Reinitialize reader/writer with existing buffers
     self.reader = self.stream.reader(self.io, self.read_buffer);
