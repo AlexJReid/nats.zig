@@ -1,8 +1,8 @@
 .{
-    .name = .nats,
-    .version = "0.1.0",
+    .name = .nats_alexjreid,
+    .version = "0.1.0-alexjreid.1",
     // Changing fingerprint has security and trust implications.
-    .fingerprint = 0x31f7624fb15addf7,
+    .fingerprint = 0x1de0446b42477a2d,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{},
     .paths = .{
